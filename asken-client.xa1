@@ -1,4 +1,5 @@
 EXEC("bash", "-c", %>command -v curl > /dev/null; echo $?<%).& == "0" || !!"Error: curl is not installed."
+EXEC("bash", "-c", %>command -v ./build/xq > /dev/null; echo $?<%).& == "0" || !!"Error: xq is not installed."
 {
   search := query -> EXEC(
     "curl",
@@ -9,5 +10,10 @@ EXEC("bash", "-c", %>command -v curl > /dev/null; echo $?<%).& == "0" || !!"Erro
     "-H", "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
     "-b", "PSID_0: $(READ(ENV.HOME & "/.asken-client/ASKEN_TOKEN"))",
     "--data-urlencode", "data[MenuSearch][word]=$query",
-  )
+  ) | "$_\n" >> TO_STRING | *_xml2obj | _.div.div.div::array()().a | a => {
+    label: a."#text"
+    id: a."@onclick" =~ /^javascript:Calc\.step2\.setMenu\("(\d+)"\);$/ | _.1
+  }
+  _xml2obj := xml -> EXEC("bash", "-c", %>printf '%s\n' "$1" | ./build/xq -m -j<%, "--", xml).&.$*
+  `::array` := (VALUE): this -> this ?= ARRAY ? this : [this]
 }
