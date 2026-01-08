@@ -1,0 +1,20 @@
+
+html := JS("fetch")(
+	"https://www.asken.jp/calculate/step2_keyword"
+	{
+    method: "POST"
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+    }::TO_JS()
+    body: JS("URLSearchParams")::new({
+      "data[MenuSearch][word]": "マクドナルド"
+    }::TO_JS())
+	}::TO_JS()
+)::(AWAIT)()::text()::(AWAIT)()
+div := WINDOW.document::createElement("div")
+div.innerHTML = html
+WINDOW.console.log << WINDOW.Array.from(div::querySelectorAll("a"))() | ((
+  m := _::getAttribute("onclick") =~ /setMenu\\("(\\d+)"\\)/
+  m == NULL && skip!! E
+	[m.1, _.textContent]
+) !: skip) >> TO_OBJECT | _::TO_JS()
