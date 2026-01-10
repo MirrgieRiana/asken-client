@@ -46,4 +46,37 @@ getAskenToken := , -> READ("$(ENV.HOME)/.asken-client/ASKEN_TOKEN").& || !!"Erro
     )
   )
 
+  rawAdd := date, type, id, quantity -> EXEC("bash", "-c", %>
+    date=$2
+    type=$3
+    id=$4
+    quantity=$5
+    exec curl \
+      "https://www.asken.jp/meal/add_menu?meal_type=$type&record_date=$date" \
+      -s \
+      -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
+      -H 'Accept: application/json' \
+      -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36' \
+      -b "PSID_0=$1" \
+      --data-urlencode "data[Photo][image_authcode]=" \
+      --data-urlencode "data[Photo][dish_id]=" \
+      --data-urlencode "data[Photo][class_id]=" \
+      --data-urlencode "data[Photo][similar_flag]=0" \
+      --data-urlencode "data[menu_id]=$id" \
+      --data-urlencode "data[menu_name]=" \
+      --data-urlencode "data[menu_quantity]=$quantity" \
+      --data-urlencode "data[menu_unit_name]=" \
+      --data-urlencode "data[input_method]=select" \
+      --data-urlencode "data[self_energy]=0" \
+      --data-urlencode "data[baseEnergy]=0" \<%= "" /* 200などの値が本来は設定されているが、指定しなくても通るので0にする */ %>
+      --data-urlencode "data[SelfQuantityValue]=" \
+      --data-urlencode "data[SelfEnergyValue]=" \
+      --data-urlencode "data[Favorite][add_flag]=0"
+  <%, "--", getAskenToken(), date, type, id, quantity) | "$_\n" >> TO_STRING >> \(DEBUG && *OUT; _)
+
+  add := date, type, id, quantity -> (
+    root := rawAdd(date; type; id; quantity) >> JSOND
+    root
+  )
+
 }
