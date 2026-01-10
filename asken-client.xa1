@@ -18,15 +18,16 @@ getAskenToken := , -> READ("$(ENV.HOME)/.asken-client/ASKEN_TOKEN").& || !!"Erro
 {
 
   /** rawSearch(query: STRING): STRING<HTML> */
-  rawSearch := query -> EXEC(
-    "curl",
-    "-s",
-    "https://www.asken.jp/meal/step2_keyword",
-    "-H", "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-    "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-    "-b", "PSID_0=$(getAskenToken())",
-    "--data-urlencode", "data[MenuSearch][word]=$query",
-  ) | "$_\n" >> TO_STRING >> \(DEBUG && *OUT; _)
+  rawSearch := query -> EXEC("bash", "-c", %>
+    query=$2
+    exec curl \
+      'https://www.asken.jp/meal/step2_keyword' \
+      -s \
+      -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
+      -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36' \
+      -b "PSID_0=$1" \
+      --data-urlencode "data[MenuSearch][word]=$query"
+  <%, "--", getAskenToken(), query) | "$_\n" >> TO_STRING >> \(DEBUG && *OUT; _)
 
   /** search(query: STRING): STREAM<OBJECT> */
   search := query -> (
