@@ -1,39 +1,42 @@
+DEBUG := ENV.DEBUG.?
 
 // 前提ツールのチェック
 EXEC("bash", "-c", %>command -v curl > /dev/null; echo $?<%).& == "0" || !!"Error: curl is not installed."
+EXEC("bash", "-c", %>command -v xmllint > /dev/null; echo $?<%).& == "0" || !!"Error: xmllint is not installed."
 EXEC("bash", "-c", %>command -v ./build/xq > /dev/null; echo $?<%).& == "0" || !!"Error: xq is not installed."
 
 // Utilities
 `::array` := (VALUE): this -> this ?= ARRAY ? this : [this]
-xml2obj := xml -> EXEC("bash", "-c", %>
-  # なぜか xq の -j オプションをいきなり付けると &nbsp; がエラーになる
-  printf '%s\n' "$1" | ./build/xq -m | ./build/xq -m -j
-<%, "--", xml) !? (e => !!"XML to JSON conversion error: $e") >> JSOND
+html2obj := xml -> EXEC("bash", "-c", %>
+  # xq -j はHTMLをまともに読めないのでXMLに変換してから渡す
+  printf '%s\n' "$1" | xmllint --html --recover --nowarning --xmlout - | ./build/xq -j
+<%, "--", "<meta charset=UTF-8>" & xml) !? (e => !!"XML to JSON conversion error: $e") >> JSOND
 
 // Private Methods
 getAskenToken := , -> READ("$(ENV.HOME)/.asken-client/ASKEN_TOKEN").& || !!"Error: ASKEN_TOKEN is not set."
 
 {
 
+  /** rawSearch(query: STRING): STRING<HTML> */
+  rawSearch := query -> EXEC(
+    "curl",
+    "-s",
+    "https://www.asken.jp/meal/step2_keyword",
+    "-H", "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+    "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    "-b", "PSID_0=$(getAskenToken())",
+    "--data-urlencode", "data[MenuSearch][word]=$query",
+  ) | "$_\n" >> TO_STRING >> \(DEBUG && *OUT; _)
+
   /** search(query: STRING): STREAM<OBJECT> */
   search := query -> (
-    root := EXEC(
-      "curl",
-      "-s",
-      "https://www.asken.jp/meal/step2_keyword",
-      "-H", "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
-      "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-      "-b", "PSID_0=$(getAskenToken())",
-      "--data-urlencode", "data[MenuSearch][word]=$query",
-    ) | "$_\n" >> TO_STRING
-    //>> \(*OUT; _)
-    >> xml2obj
-    //OUT << root >> JSON[indent: "  "]
+    root := rawSearch(query) >> html2obj
+    DEBUG && (OUT << root >> JSON[indent: "  "])
 
-    root.div.div.div::array()()
+    root.html.body.div.div.div::array()()
     >> DROP[1] // 「メニュー名」行
     | record => (
-      //OUT << record >> JSON[indent: "  "]
+      DEBUG && (OUT << record >> JSON[indent: "  "])
       {
         label: record.div.div.0.a."#text"
         id: record.div.div.0.a."@onclick" =~ /^javascript:[^(]+\("(\d+)", .+\);$/ | _.1
